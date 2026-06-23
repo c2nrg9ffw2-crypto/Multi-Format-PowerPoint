@@ -22,6 +22,10 @@ pip install python-pptx
 ## Running
 
 ```bash
+# Drop files in input/ and just run — no arguments needed:
+python main.py
+
+# Or pass explicit paths:
 python main.py report.xlsx                              # xlsx only
 python main.py doc.pdf                                  # pdf only
 python main.py data.xlsx summary.pdf -o deck.pptx       # both, custom output
@@ -34,10 +38,14 @@ python main.py report.xlsx --no-qa                      # skip QA step
 
 | Argument | Description |
 |---|---|
-| `inputs` (positional, one or more) | `.xlsx` and/or `.pdf` source files; multiple files of each type are merged |
+| `inputs` (positional, optional) | `.xlsx` and/or `.pdf` files; omit to auto-discover from `input/` |
 | `-o / --output` | Output `.pptx` path (default: `output.pptx`) |
 | `--template TEMPLATE.pptx` | Existing `.pptx` to use as a base; triggers the python-pptx path instead of PptxGenJS |
 | `--no-qa` | Skip the QA validation step |
+
+### input/ folder
+
+Drop `.xlsx` and `.pdf` files in the `input/` folder, then run `python main.py` with no arguments. Files are sorted alphabetically before processing. Explicit file paths on the command line always take priority over auto-discovery.
 
 ### Generating test data
 

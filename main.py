@@ -25,9 +25,9 @@ def main(argv=None):
     )
     parser.add_argument(
         "inputs",
-        nargs="+",
+        nargs="*",
         metavar="FILE",
-        help=".xlsx and/or .pdf source files (one or more of each)",
+        help=".xlsx and/or .pdf source files; omit to auto-discover from input/",
     )
     parser.add_argument(
         "-o", "--output",
@@ -46,6 +46,32 @@ def main(argv=None):
         help="Skip the QA validation step",
     )
     args = parser.parse_args(argv)
+
+    # Auto-discover from input/ when no files are given
+    if not args.inputs:
+        input_dir = Path(__file__).parent / "input"
+        if not input_dir.is_dir():
+            print(
+                "Error: no files given and input/ folder not found.\n"
+                "Create an input/ folder and drop your .xlsx/.pdf files in it.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        discovered = sorted(
+            p for p in input_dir.iterdir()
+            if p.suffix.lower() in {".xlsx", ".pdf"}
+        )
+        if not discovered:
+            print(
+                f"Error: no .xlsx or .pdf files found in {input_dir}/\n"
+                "Drop your files there or pass them as arguments.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Auto-discovered {len(discovered)} file(s) from input/:")
+        for p in discovered:
+            print(f"  {p.name}")
+        args.inputs = [str(p) for p in discovered]
 
     # Validate template if provided
     if args.template:
