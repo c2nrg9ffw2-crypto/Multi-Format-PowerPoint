@@ -1,0 +1,12 @@
+DARK = "#141413"
+LIGHT = "#faf9f5"
+ORANGE = "#d97757"
+BLUE = "#6a9bcc"
+GREEN = "#788c5d"
+MID_GRAY = "#6b6b6b"
+LIGHT_GRAY = "#d4d4d0"
+
+FONT_HEADING = "Poppins"
+FONT_BODY = "Lora"
+
+ACCENT_CYCLE = [ORANGE, BLUE, GREEN]

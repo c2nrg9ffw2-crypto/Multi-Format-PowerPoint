@@ -1,0 +1,9 @@
+{
+  "name": "pptx-generator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PptxGenJS renderer for the multi-format PowerPoint generator",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}
