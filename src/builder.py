@@ -243,3 +243,87 @@ def build_pptx(slide_data: list[dict], output_path: str) -> None:
             raise RuntimeError(f"node exited with code {result.returncode}")
     finally:
         tmp_file.unlink(missing_ok=True)
+
+
+def build_pptx_from_template(slide_data: list[dict], template_path: str, output_path: str) -> None:
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches
+    except ImportError:
+        raise RuntimeError(
+            "python-pptx is required for --template. Run: pip install python-pptx"
+        )
+
+    prs = Presentation(template_path)
+    layout_names = [lay.name.lower() for lay in prs.slide_layouts]
+
+    def _get_layout(*keywords):
+        for kw in keywords:
+            for i, name in enumerate(layout_names):
+                if kw in name:
+                    return prs.slide_layouts[i]
+        return prs.slide_layouts[min(1, len(prs.slide_layouts) - 1)]
+
+    def _fill_placeholder(slide, idx, text):
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == idx:
+                ph.text = str(text)
+                return True
+        return False
+
+    def _fill_body(slide, items):
+        for ph in slide.placeholders:
+            if ph.placeholder_format.idx == 1:
+                tf = ph.text_frame
+                tf.clear()
+                for i, item in enumerate(items):
+                    p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                    p.text = str(item)
+                return True
+        return False
+
+    def _add_table(slide, headers, rows):
+        if not headers:
+            return
+        n_cols = len(headers)
+        n_rows = len(rows) + 1
+        tbl = slide.shapes.add_table(
+            n_rows, n_cols,
+            Inches(0.5), Inches(1.5),
+            Inches(12.0), Inches(min(0.35 * n_rows, 5.0)),
+        ).table
+        for j, h in enumerate(headers):
+            tbl.cell(0, j).text = str(h)
+        for i, row in enumerate(rows):
+            for j, val in enumerate(row[:n_cols]):
+                tbl.cell(i + 1, j).text = str(val)
+
+    for slide_dict in slide_data:
+        stype = slide_dict.get("type")
+
+        if stype == "title":
+            s = prs.slides.add_slide(_get_layout("title slide", "title"))
+            _fill_placeholder(s, 0, slide_dict.get("title", ""))
+            _fill_placeholder(s, 1, slide_dict.get("subtitle", ""))
+
+        elif stype == "agenda":
+            s = prs.slides.add_slide(_get_layout("content", "title and content", "title"))
+            _fill_placeholder(s, 0, "Agenda")
+            _fill_body(s, slide_dict.get("items", []))
+
+        elif stype == "content":
+            s = prs.slides.add_slide(_get_layout("content", "title and content", "title"))
+            _fill_placeholder(s, 0, slide_dict.get("title", ""))
+            _fill_body(s, slide_dict.get("bullets", []))
+
+        elif stype == "data":
+            s = prs.slides.add_slide(_get_layout("blank", "title only", "title"))
+            _fill_placeholder(s, 0, slide_dict.get("title", "Data"))
+            _add_table(s, slide_dict.get("headers", []), slide_dict.get("rows", []))
+
+        elif stype == "summary":
+            s = prs.slides.add_slide(_get_layout("content", "title and content", "title"))
+            _fill_placeholder(s, 0, "Summary")
+            _fill_body(s, slide_dict.get("points", []))
+
+    prs.save(output_path)

@@ -1,12 +1,23 @@
 """Parse .xlsx and .pdf source files into structured dicts."""
-import re
+import sys
 from pathlib import Path
 
 
-def parse_xlsx(path: str) -> dict:
-    import openpyxl
+class ParseError(ValueError):
+    """Raised when a source file cannot be read or is unsupported."""
 
-    wb = openpyxl.load_workbook(path, data_only=True)
+
+def parse_xlsx(path: str) -> dict:
+    try:
+        import openpyxl
+    except ImportError:
+        raise ParseError("openpyxl is not installed. Run: pip install openpyxl")
+
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True)
+    except Exception as e:
+        raise ParseError(f"Cannot open {path!r}: {e}") from e
+
     result = {}
     for sheet in wb.sheetnames:
         ws = wb[sheet]
@@ -16,6 +27,10 @@ def parse_xlsx(path: str) -> dict:
                 rows.append([str(c) if c is not None else "" for c in row])
         if rows:
             result[sheet] = rows[:501]  # header + 500 data rows
+
+    if not result:
+        print(f"Warning: {path} contains no data.", file=sys.stderr)
+
     return result
 
 
@@ -33,12 +48,24 @@ def _extract_tables(page) -> list[list[list[str]]]:
 
 
 def parse_pdf(path: str) -> dict:
-    import pdfplumber
+    try:
+        import pdfplumber
+    except ImportError:
+        raise ParseError("pdfplumber is not installed. Run: pip install pdfplumber")
 
-    pages = []
-    with pdfplumber.open(path) as pdf:
-        for i, page in enumerate(pdf.pages):
-            text = (page.extract_text() or "").strip()
-            tables = _extract_tables(page)
-            pages.append({"index": i, "text": text, "tables": tables})
+    try:
+        pages = []
+        with pdfplumber.open(path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                text = (page.extract_text() or "").strip()
+                tables = _extract_tables(page)
+                pages.append({"index": i, "text": text, "tables": tables})
+    except ParseError:
+        raise
+    except Exception as e:
+        raise ParseError(f"Cannot open {path!r}: {e}") from e
+
+    if not pages:
+        print(f"Warning: {path} contains no pages.", file=sys.stderr)
+
     return {"pages": pages}

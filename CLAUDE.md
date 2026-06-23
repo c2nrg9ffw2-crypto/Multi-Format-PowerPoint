@@ -14,23 +14,29 @@ pip install openpyxl pdfplumber markitdown
 
 # Node dependency (PptxGenJS — used as the PPTX renderer)
 npm install pptxgenjs
+
+# Only needed when using --template
+pip install python-pptx
 ```
 
 ## Running
 
 ```bash
-python main.py report.xlsx                        # xlsx only
-python main.py doc.pdf                            # pdf only
-python main.py data.xlsx summary.pdf -o deck.pptx # both, custom output
-python main.py report.xlsx --no-qa                # skip QA step
+python main.py report.xlsx                              # xlsx only
+python main.py doc.pdf                                  # pdf only
+python main.py data.xlsx summary.pdf -o deck.pptx       # both, custom output
+python main.py a.xlsx b.xlsx c.pdf -o combined.pptx     # multiple files merged
+python main.py data.xlsx --template brand.pptx          # edit existing template
+python main.py report.xlsx --no-qa                      # skip QA step
 ```
 
 ### CLI arguments (`main.py`)
 
 | Argument | Description |
 |---|---|
-| `inputs` (positional, 1–2 files) | `.xlsx` and/or `.pdf` source files |
+| `inputs` (positional, one or more) | `.xlsx` and/or `.pdf` source files; multiple files of each type are merged |
 | `-o / --output` | Output `.pptx` path (default: `output.pptx`) |
+| `--template TEMPLATE.pptx` | Existing `.pptx` to use as a base; triggers the python-pptx path instead of PptxGenJS |
 | `--no-qa` | Skip the QA validation step |
 
 ### Generating test data
@@ -44,7 +50,10 @@ python _make_sample_pdf.py
 
 ## Architecture
 
-Python orchestrates the pipeline; Node.js renders the `.pptx`. The boundary: `builder.py` generates a PptxGenJS JS script, writes it to `_pptx_render_tmp.js` in the project root, shells out to `node`, then deletes the temp file. This avoids `python-pptx` entirely.
+Python orchestrates the pipeline with two rendering paths:
+
+- **No `--template`** (default): `builder.py` generates a PptxGenJS JS script, writes it to `_pptx_render_tmp.js` in the project root, shells out to `node`, then deletes the temp file. Full Anthropic brand styling. Requires Node 18+.
+- **With `--template`**: `builder.py:build_pptx_from_template()` uses `python-pptx` to open the supplied `.pptx`, maps slide types to the template's existing layouts by name substring match, and appends slides. Inherits the template's theme and fonts. Requires `pip install python-pptx`.
 
 ### Pipeline stages
 
@@ -52,7 +61,7 @@ Python orchestrates the pipeline; Node.js renders the `.pptx`. The boundary: `bu
 |---|---|---|
 | Parse | `src/parsers.py` | `parse_xlsx()` → sheets/rows dict; `parse_pdf()` → pages/text/tables dict |
 | Summarize | `src/summarizer.py` | `build_slide_data()` converts parsed content into a `slide_data` list (typed slide dicts) |
-| Build | `src/builder.py` | `build_pptx()` generates PptxGenJS JS from `slide_data`, executes via `node` subprocess |
+| Build | `src/builder.py` | `build_pptx()` → PptxGenJS via `node`; `build_pptx_from_template()` → python-pptx editing path |
 | QA | `src/qa.py` | Runs `markitdown` on output; checks for placeholder text and empty slides |
 | Brand | `src/brand.py` | Anthropic color and font constants — imported by `builder.py` only |
 
@@ -101,7 +110,10 @@ Accent colors cycle via `ACCENT_CYCLE = [ORANGE, BLUE, GREEN]` — imported by `
 
 ## Constraints
 
-- Inputs: `.xlsx` and `.pdf` only; at most one of each per invocation.
+- Inputs: `.xlsx` and `.pdf` only; unlimited files of each type per invocation.
+- Multiple xlsx files: sheets are merged; sheet names are prefixed with `{stem} – ` when more than one xlsx is given.
+- Multiple pdf files: pages are concatenated in input order before summarization.
+- Corrupted or unreadable files raise `ParseError` with a clear message and exit code 1.
 - Output: `.pptx` only.
 - No AI/LLM call — summarization is purely rule-based (heuristics in `summarizer.py`).
 - xlsx sheets capped at 500 rows; pdf groups capped at 8 sections of 1–2 pages.
